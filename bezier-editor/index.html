@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Piecewise Bézier Curve Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel-bg: #ffffff;
+    --inset-bg: #f6f6f9;
+    --border: #e5e5ea;
+    --text: #1c1c1e;
+    --muted: #7a7a80;
+    --accent: #5b5bf0;
+    --accent-soft: rgba(91, 91, 240, 0.1);
+    --anchor: #e0435a;
+    --control: #3b82f6;
+    --polygon-line: #b3b3ba;
+    --hull-fill: rgba(59, 130, 246, 0.08);
+    --curve: #1c1c1e;
+    --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px rgba(20, 20, 30, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #232326;
+      --panel-bg: #232326;
+      --inset-bg: #1b1b1d;
+      --border: #38383c;
+      --text: #f2f2f4;
+      --muted: #9a9aa2;
+      --accent: #8585fa;
+      --accent-soft: rgba(133, 133, 250, 0.16);
+      --anchor: #ff6b6b;
+      --control: #6699ff;
+      --polygon-line: #6e6e73;
+      --hull-fill: rgba(102, 153, 255, 0.12);
+      --curve: #f2f2f4;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1 { font-size: 1.7rem; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 1rem; margin-top: -4px; text-align: center; max-width: 640px; }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 1100px;
+  }
+  #canvas-wrap {
+    background: var(--inset-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 8px;
+    flex: 1 1 640px;
+    max-width: 800px;
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 18px 20px 20px;
+    width: 260px;
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .section-label {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  label.row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.98rem;
+    padding: 6px 8px;
+    margin: 0 -8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  label.row:hover { background: var(--inset-bg); }
+  label.row.disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  label.row.disabled:hover { background: none; }
+  label.row input[type="radio"],
+  label.row input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  button {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.96rem;
+    cursor: pointer;
+    transition: filter 0.12s ease, transform 0.05s ease;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+</style>
+</head>
+<body>
+
+<a href="../" style="align-self:flex-start; color:var(--accent); font-size:0.9rem; text-decoration:none; font-weight:600;">← All apps</a>
+<h1>Piecewise Bézier Curve Editor</h1>
+<p class="subtitle">
+  Drag the red anchor points and blue control points. Click empty space to add a new anchor at the end.
+  Double-click an anchor to remove it, or double-click a control point to reset it to its default position.
+</p>
+
+<div class="layout">
+  <div id="canvas-wrap">
+    <svg id="svg" viewBox="0 0 800 500"></svg>
+  </div>
+
+  <div class="panel">
+    <div>
+      <span class="section-label">Degree</span>
+      <label class="row"><input type="radio" name="degree" value="2" autocomplete="off"> Quadratic (1 handle/segment)</label>
+      <label class="row"><input type="radio" name="degree" value="3" autocomplete="off" checked> Cubic (2 handles/segment)</label>
+    </div>
+
+    <div>
+      <span class="section-label">Continuity at joints</span>
+      <label class="row" data-continuity-row="C0"><input type="radio" name="continuity" value="C0" autocomplete="off"> C0 — position only</label>
+      <label class="row" data-continuity-row="G1"><input type="radio" name="continuity" value="G1" autocomplete="off"> G1 — matching tangent direction</label>
+      <label class="row" data-continuity-row="C1"><input type="radio" name="continuity" value="C1" autocomplete="off" checked> C1 — matching tangent vector</label>
+      <label class="row" data-continuity-row="C2" title="Needs the second handle per segment that only cubic curves have"><input type="radio" name="continuity" value="C2" autocomplete="off"> C2 — matching curvature (cubic only)</label>
+    </div>
+
+    <div>
+      <span class="section-label">Display</span>
+      <label class="row"><input type="checkbox" id="showPolygon" checked> Control polygon</label>
+      <label class="row"><input type="checkbox" id="showHull"> Convex hull per segment</label>
+    </div>
+
+    <button id="resetBtn">Reset curve</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("svg");
+  const VBW = 800, VBH = 500;
+
+  let state = {
+    degree: 3,
+    continuity: "C1",
+    showPolygon: true,
+    showHull: false,
+    anchors: [],
+    controls: [] // controls[i] = array of {x,y}, length = degree-1, for segment i (between anchors[i] and anchors[i+1])
+  };
+
+  function defaultAnchors() {
+    return [
+      { x: 100, y: 350 },
+      { x: 300, y: 120 },
+      { x: 500, y: 420 },
+      { x: 700, y: 180 }
+    ];
+  }
+
+  function defaultControlsForSegment(a0, a1, degree) {
+    if (degree === 2) {
+      return [{ x: (a0.x + a1.x) / 2, y: (a0.y + a1.y) / 2 - 60 }];
+    }
+    return [
+      { x: a0.x + (a1.x - a0.x) / 3, y: a0.y + (a1.y - a0.y) / 3 - 40 },
+      { x: a0.x + 2 * (a1.x - a0.x) / 3, y: a0.y + 2 * (a1.y - a0.y) / 3 + 40 }
+    ];
+  }
+
+  function resetAllControls() {
+    state.controls = [];
+    for (let i = 0; i < state.anchors.length - 1; i++) {
+      state.controls.push(defaultControlsForSegment(state.anchors[i], state.anchors[i + 1], state.degree));
+    }
+    applyContinuityToAll();
+  }
+
+  function reset() {
+    state.anchors = defaultAnchors();
+    resetAllControls();
+    render();
+  }
+
+  // --- geometry helpers ---
+
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  function segCount() { return state.anchors.length - 1; }
+
+  function ctrlPerSeg() { return state.degree - 1; }
+
+  // the control point of segment `seg` nearest to its start anchor
+  function firstCtrl(seg) { return state.controls[seg][0]; }
+  // the control point of segment `seg` nearest to its end anchor
+  function lastCtrl(seg) { return state.controls[seg][ctrlPerSeg() - 1]; }
+
+  // Apply continuity constraint at internal anchor index k (1 <= k <= n-2),
+  // given that the "moved" side has already been updated by the user / caller.
+  // movedSide: 'before' (lastCtrl of segment k-1) or 'after' (firstCtrl of segment k)
+  function propagateContinuity(k, movedSide) {
+    if (k <= 0 || k >= state.anchors.length - 1) return;
+    if (state.continuity === "C0") return;
+    const anchor = state.anchors[k];
+    const movedPoint = movedSide === "before" ? lastCtrl(k - 1) : firstCtrl(k);
+    const otherPoint = movedSide === "before" ? firstCtrl(k) : lastCtrl(k - 1);
+
+    const v = { x: movedPoint.x - anchor.x, y: movedPoint.y - anchor.y };
+
+    if (state.continuity === "C1") {
+      otherPoint.x = anchor.x - v.x;
+      otherPoint.y = anchor.y - v.y;
+    } else if (state.continuity === "G1") {
+      const len = Math.hypot(v.x, v.y) || 1;
+      const dir = { x: -v.x / len, y: -v.y / len };
+      const otherDist = dist(otherPoint, anchor) || 40;
+      otherPoint.x = anchor.x + dir.x * otherDist;
+      otherPoint.y = anchor.y + dir.y * otherDist;
+    }
+  }
+
+  function applyContinuityToAll() {
+    if (state.continuity === "C2" && state.degree === 3) {
+      solveC2();
+      return;
+    }
+    // Process joints left to right, always treating the earlier (already-settled)
+    // side as authoritative. For cubic this direction is arbitrary — each side of
+    // a joint is an independent handle. For quadratic it's required: a segment's
+    // single handle is shared between its two joints, so propagating "backward"
+    // (later segment overwrites earlier) would have the second joint's fix undo
+    // the first joint's fix on the segment they share.
+    for (let k = 1; k < state.anchors.length - 1; k++) {
+      propagateContinuity(k, "before");
+    }
+  }
+
+  // Natural cubic Bezier spline through the anchors (C2 continuity).
+  // Solves tridiagonal systems for the first control point of each segment,
+  // per coordinate. Standard algorithm (see e.g. particleincell.com "smooth bezier").
+  function solveC2() {
+    const n = segCount();
+    if (n < 1) return;
+    const K = state.anchors;
+    if (n === 1) {
+      state.controls[0][0] = { x: K[0].x + (K[1].x - K[0].x) / 3, y: K[0].y + (K[1].y - K[0].y) / 3 };
+      state.controls[0][1] = { x: K[0].x + 2 * (K[1].x - K[0].x) / 3, y: K[0].y + 2 * (K[1].y - K[0].y) / 3 };
+      return;
+    }
+    function solveAxis(getCoord) {
+      const a = new Array(n), b = new Array(n), c = new Array(n), r = new Array(n);
+      a[0] = 0; b[0] = 2; c[0] = 1; r[0] = getCoord(K[0]) + 2 * getCoord(K[1]);
+      for (let i = 1; i < n - 1; i++) {
+        a[i] = 1; b[i] = 4; c[i] = 1;
+        r[i] = 4 * getCoord(K[i]) + 2 * getCoord(K[i + 1]);
+      }
+      a[n - 1] = 2; b[n - 1] = 7; c[n - 1] = 0;
+      r[n - 1] = 8 * getCoord(K[n - 1]) + getCoord(K[n]);
+
+      // Thomas algorithm
+      const cp = new Array(n), rp = new Array(n);
+      cp[0] = c[0] / b[0];
+      rp[0] = r[0] / b[0];
+      for (let i = 1; i < n; i++) {
+        const m = b[i] - a[i] * cp[i - 1];
+        cp[i] = c[i] / m;
+        rp[i] = (r[i] - a[i] * rp[i - 1]) / m;
+      }
+      const p1 = new Array(n);
+      p1[n - 1] = rp[n - 1];
+      for (let i = n - 2; i >= 0; i--) {
+        p1[i] = rp[i] - cp[i] * p1[i + 1];
+      }
+      const p2 = new Array(n);
+      for (let i = 0; i < n - 1; i++) {
+        p2[i] = 2 * getCoord(K[i + 1]) - p1[i + 1];
+      }
+      p2[n - 1] = (getCoord(K[n]) + p1[n - 1]) / 2;
+      return { p1, p2 };
+    }
+
+    const xr = solveAxis(p => p.x);
+    const yr = solveAxis(p => p.y);
+    for (let i = 0; i < n; i++) {
+      state.controls[i][0] = { x: xr.p1[i], y: yr.p1[i] };
+      state.controls[i][1] = { x: xr.p2[i], y: yr.p2[i] };
+    }
+  }
+
+  // --- editing operations ---
+
+  function addAnchorAt(pt) {
+    const n = state.anchors.length;
+    const prevAnchor = state.anchors[n - 1];
+    state.anchors.push(pt);
+    state.controls.push(defaultControlsForSegment(prevAnchor, pt, state.degree));
+    if (n >= 2) propagateOrSolve();
+  }
+
+  function removeAnchor(idx) {
+    if (state.anchors.length <= 2) return;
+    state.anchors.splice(idx, 1);
+    if (idx === 0) {
+      state.controls.splice(0, 1);
+    } else if (idx === state.anchors.length) {
+      state.controls.splice(state.controls.length - 1, 1);
+    } else {
+      const a0 = state.anchors[idx - 1], a1 = state.anchors[idx];
+      state.controls.splice(idx - 1, 2, defaultControlsForSegment(a0, a1, state.degree));
+    }
+    propagateOrSolve();
+  }
+
+  // Resets a single control point back to its default (auto-interpolated)
+  // position, re-applying continuity to whichever joint it touches.
+  function resetControlPoint(segIdx, ctrlIdx) {
+    const a0 = state.anchors[segIdx], a1 = state.anchors[segIdx + 1];
+    const defaults = defaultControlsForSegment(a0, a1, state.degree);
+    state.controls[segIdx][ctrlIdx] = defaults[ctrlIdx];
+    const lastIdx = ctrlPerSeg() - 1;
+    if (ctrlIdx === 0) propagateContinuity(segIdx, "after");
+    if (ctrlIdx === lastIdx) propagateContinuity(segIdx + 1, "before");
+  }
+
+  function propagateOrSolve() {
+    if (state.continuity === "C2" && state.degree === 3) solveC2();
+    else applyContinuityToAll();
+  }
+
+  function updateContinuityAvailability() {
+    const c2Radio = document.querySelector('input[name="continuity"][value="C2"]');
+    const c2Row = document.querySelector('[data-continuity-row="C2"]');
+    const disable = state.degree !== 3;
+    c2Radio.disabled = disable;
+    c2Row.classList.toggle("disabled", disable);
+  }
+
+  function changeDegree(d) {
+    state.degree = d;
+    if (d === 2 && state.continuity === "C2") {
+      state.continuity = "C1";
+      document.querySelector('input[name="continuity"][value="C1"]').checked = true;
+    }
+    updateContinuityAvailability();
+    resetAllControls();
+    render();
+  }
+
+  function changeContinuity(mode) {
+    state.continuity = mode;
+    propagateOrSolve();
+    render();
+  }
+
+  // --- rendering ---
+
+  function pathData() {
+    let d = `M ${state.anchors[0].x} ${state.anchors[0].y} `;
+    for (let i = 0; i < segCount(); i++) {
+      const a1 = state.anchors[i + 1];
+      const ctrls = state.controls[i];
+      if (state.degree === 2) {
+        d += `Q ${ctrls[0].x} ${ctrls[0].y} ${a1.x} ${a1.y} `;
+      } else {
+        d += `C ${ctrls[0].x} ${ctrls[0].y} ${ctrls[1].x} ${ctrls[1].y} ${a1.x} ${a1.y} `;
+      }
+    }
+    return d;
+  }
+
+  function convexHull(points) {
+    const pts = points.slice().sort((p, q) => p.x - q.x || p.y - q.y);
+    if (pts.length < 3) return pts;
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower = [];
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+      lower.push(p);
+    }
+    const upper = [];
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    lower.pop(); upper.pop();
+    return lower.concat(upper);
+  }
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(svgNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // Draws a visible dot plus a larger invisible hit-target on top of it, so a
+  // slightly-missed drag still grabs the point instead of adding a new anchor.
+  function addInteractivePoint(cx, cy, visualR, fillVar, onPointerDown, onDblClick) {
+    const visual = el("circle", {
+      cx, cy, r: visualR, fill: fillVar,
+      stroke: "var(--bg)", "stroke-width": visualR > 6 ? "2" : "1.5",
+      "pointer-events": "none"
+    });
+    svg.appendChild(visual);
+    const hit = el("circle", {
+      cx, cy, r: visualR + 7, fill: "transparent", style: "cursor:grab"
+    });
+    hit.addEventListener("pointerdown", onPointerDown);
+    if (onDblClick) hit.addEventListener("dblclick", ev => { ev.stopPropagation(); onDblClick(); });
+    svg.appendChild(hit);
+  }
+
+  let dragging = null; // { type: 'anchor'|'control', anchorIdx, segIdx, ctrlIdx }
+  let pendingAdd = null; // { pos, } candidate click-to-add on empty canvas
+
+  function render() {
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", `0 0 ${VBW} ${VBH}`);
+
+    if (state.showHull) {
+      for (let i = 0; i < segCount(); i++) {
+        const pts = [state.anchors[i], ...state.controls[i], state.anchors[i + 1]];
+        const hull = convexHull(pts);
+        if (hull.length >= 3) {
+          svg.appendChild(el("polygon", {
+            points: hull.map(p => `${p.x},${p.y}`).join(" "),
+            fill: "var(--hull-fill)",
+            stroke: "var(--polygon-line)",
+            "stroke-dasharray": "4 3",
+            "stroke-width": "1"
+          }));
+        }
+      }
+    }
+
+    if (state.showPolygon) {
+      for (let i = 0; i < segCount(); i++) {
+        const pts = [state.anchors[i], ...state.controls[i], state.anchors[i + 1]];
+        for (let j = 0; j < pts.length - 1; j++) {
+          svg.appendChild(el("line", {
+            x1: pts[j].x, y1: pts[j].y, x2: pts[j + 1].x, y2: pts[j + 1].y,
+            stroke: "var(--polygon-line)", "stroke-width": "1", "stroke-dasharray": "3 3"
+          }));
+        }
+      }
+    }
+
+    svg.appendChild(el("path", {
+      d: pathData(), fill: "none", stroke: "var(--curve)", "stroke-width": "2.5"
+    }));
+
+    const isC2 = state.continuity === "C2" && state.degree === 3;
+
+    for (let i = 0; i < segCount(); i++) {
+      for (let j = 0; j < ctrlPerSeg(); j++) {
+        const p = state.controls[i][j];
+        if (isC2) {
+          // Auto-computed in C2 mode: shown so the construction is visible, but
+          // not draggable — dragging one would silently break curvature matching
+          // elsewhere, since these are a function of the anchors, not free points.
+          svg.appendChild(el("circle", {
+            cx: p.x, cy: p.y, r: 4.5, fill: "none",
+            stroke: "var(--control)", "stroke-width": "1.5", "stroke-dasharray": "2 2",
+            "fill-opacity": "0.5", "pointer-events": "none"
+          }));
+        } else {
+          addInteractivePoint(
+            p.x, p.y, 5.5, "var(--control)",
+            ev => startDrag(ev, { type: "control", segIdx: i, ctrlIdx: j }),
+            () => { resetControlPoint(i, j); render(); }
+          );
+        }
+      }
+    }
+
+    state.anchors.forEach((p, idx) => {
+      addInteractivePoint(
+        p.x, p.y, 7, "var(--anchor)",
+        ev => startDrag(ev, { type: "anchor", anchorIdx: idx }),
+        () => { removeAnchor(idx); render(); }
+      );
+    });
+  }
+
+  function svgPoint(ev) {
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return { x: p.x, y: p.y };
+  }
+
+  function startDrag(ev, target) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    dragging = target;
+    dragging.start = svgPoint(ev);
+    if (target.type === "anchor") {
+      const a = state.anchors[target.anchorIdx];
+      dragging.origin = { x: a.x, y: a.y };
+    }
+    window.addEventListener("pointermove", onDrag);
+    window.addEventListener("pointerup", endDrag);
+  }
+
+  function onDrag(ev) {
+    if (!dragging) return;
+    const p = svgPoint(ev);
+    p.x = Math.max(10, Math.min(VBW - 10, p.x));
+    p.y = Math.max(10, Math.min(VBH - 10, p.y));
+
+    if (dragging.type === "anchor") {
+      const idx = dragging.anchorIdx;
+      const anchor = state.anchors[idx];
+      const dx = p.x - anchor.x, dy = p.y - anchor.y;
+      anchor.x = p.x; anchor.y = p.y;
+      const isC2 = state.continuity === "C2" && state.degree === 3;
+      if (!isC2) {
+        if (idx > 0) { const c = lastCtrl(idx - 1); c.x += dx; c.y += dy; }
+        if (idx < segCount()) { const c = firstCtrl(idx); c.x += dx; c.y += dy; }
+      } else {
+        solveC2();
+      }
+    } else {
+      const { segIdx, ctrlIdx } = dragging;
+      const c = state.controls[segIdx][ctrlIdx];
+      c.x = p.x; c.y = p.y;
+      const lastIdx = ctrlPerSeg() - 1;
+      if (ctrlIdx === 0) propagateContinuity(segIdx, "after");
+      if (ctrlIdx === lastIdx) propagateContinuity(segIdx + 1, "before");
+    }
+    render();
+  }
+
+  function endDrag() {
+    dragging = null;
+    window.removeEventListener("pointermove", onDrag);
+    window.removeEventListener("pointerup", endDrag);
+  }
+
+  function clampToCanvas(p) {
+    return {
+      x: Math.max(10, Math.min(VBW - 10, p.x)),
+      y: Math.max(10, Math.min(VBH - 10, p.y))
+    };
+  }
+
+  // Adding a point only fires on a genuine click on empty canvas — pointerdown
+  // followed by little movement — so a drag that misses a handle by a few
+  // pixels and lands on the background doesn't spawn a stray anchor.
+  svg.addEventListener("pointerdown", ev => {
+    if (dragging) return;
+    pendingAdd = svgPoint(ev);
+  });
+
+  window.addEventListener("pointerup", ev => {
+    if (!pendingAdd || dragging) { pendingAdd = null; return; }
+    const p = svgPoint(ev);
+    const moved = Math.hypot(p.x - pendingAdd.x, p.y - pendingAdd.y);
+    pendingAdd = null;
+    if (moved < 6) {
+      addAnchorAt(clampToCanvas(p));
+      render();
+    }
+  });
+
+  document.querySelectorAll('input[name="degree"]').forEach(r => {
+    r.addEventListener("change", e => { if (e.target.checked) changeDegree(parseInt(e.target.value, 10)); });
+  });
+  document.querySelectorAll('input[name="continuity"]').forEach(r => {
+    r.addEventListener("change", e => { if (e.target.checked) changeContinuity(e.target.value); });
+  });
+  document.getElementById("showPolygon").addEventListener("change", e => { state.showPolygon = e.target.checked; render(); });
+  document.getElementById("showHull").addEventListener("change", e => { state.showHull = e.target.checked; render(); });
+  document.getElementById("resetBtn").addEventListener("click", reset);
+
+  // Some browsers restore previously-checked radios from history on reload
+  // without firing a 'change' event, which would leave `state` out of sync
+  // with what's actually shown checked. Read the real DOM state on load.
+  const checkedDegree = document.querySelector('input[name="degree"]:checked');
+  const checkedContinuity = document.querySelector('input[name="continuity"]:checked');
+  if (checkedDegree) state.degree = parseInt(checkedDegree.value, 10);
+  if (checkedContinuity) state.continuity = checkedContinuity.value;
+  if (state.degree === 2 && state.continuity === "C2") {
+    state.continuity = "C1";
+    document.querySelector('input[name="continuity"][value="C1"]').checked = true;
+  }
+
+  updateContinuityAvailability();
+  reset();
+})();
+</script>
+
+</body>
+</html>

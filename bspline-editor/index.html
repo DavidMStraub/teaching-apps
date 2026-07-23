@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cubic B-Spline Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel-bg: #ffffff;
+    --inset-bg: #f6f6f9;
+    --border: #e5e5ea;
+    --text: #1c1c1e;
+    --muted: #7a7a80;
+    --accent: #5b5bf0;
+    --point: #3b82f6;
+    --polygon-line: #b3b3ba;
+    --curve: #1c1c1e;
+    --knot: #e0435a;
+    --knot-domain: rgba(91, 91, 240, 0.12);
+    --basis: #3b82f6;
+    --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px rgba(20, 20, 30, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #232326;
+      --panel-bg: #232326;
+      --inset-bg: #1b1b1d;
+      --border: #38383c;
+      --text: #f2f2f4;
+      --muted: #9a9aa2;
+      --accent: #8585fa;
+      --point: #6699ff;
+      --polygon-line: #6e6e73;
+      --curve: #f2f2f4;
+      --knot: #ff6b6b;
+      --knot-domain: rgba(133, 133, 250, 0.18);
+      --basis: #6699ff;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1 { font-size: 1.7rem; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 1rem; margin-top: -4px; text-align: center; max-width: 640px; }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 1100px;
+  }
+  #canvas-wrap {
+    background: var(--inset-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 8px;
+    flex: 1 1 640px;
+    max-width: 800px;
+  }
+  svg { width: 100%; height: auto; display: block; }
+  #main-svg { touch-action: none; cursor: crosshair; }
+  #knot-strip { margin-top: 6px; touch-action: none; }
+  #basis-plot { margin-top: 6px; }
+  .strip-label {
+    font-size: 0.76rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 10px 2px 2px;
+  }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 18px 20px 20px;
+    width: 260px;
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .section-label {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  label.row {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 0.98rem;
+    padding: 6px 8px;
+    margin: 0 -8px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+  }
+  label.row:hover { background: var(--inset-bg); }
+  label.row input[type="radio"],
+  label.row input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+  button {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.96rem;
+    cursor: pointer;
+    transition: filter 0.12s ease, transform 0.05s ease;
+  }
+  button:hover { filter: brightness(1.08); }
+  button:active { transform: translateY(1px); }
+  footer { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+
+<a href="../" style="align-self:flex-start; color:var(--accent); font-size:0.9rem; text-decoration:none; font-weight:600;">← All apps</a>
+<h1>Cubic B-Spline Editor</h1>
+<p class="subtitle">
+  Drag the blue control points. Click empty space to add one at the end, double-click one to remove it.
+  Drag the red knot ticks below the curve to reshape the knot vector — drag one onto its neighbor to raise its multiplicity.
+</p>
+
+<div class="layout">
+  <div id="canvas-wrap">
+    <svg id="main-svg" viewBox="0 0 800 460"></svg>
+    <div class="strip-label">Knot vector</div>
+    <svg id="knot-strip" viewBox="0 0 800 40"></svg>
+    <div class="strip-label" id="basis-label" style="display:none;">Basis functions N&#8347;,&#8323;(t)</div>
+    <svg id="basis-plot" viewBox="0 0 800 110" style="display:none;"></svg>
+  </div>
+
+  <div class="panel">
+    <div>
+      <span class="section-label">Knot vector preset</span>
+      <label class="row"><input type="radio" name="preset" value="clamped" checked> Clamped (touches ends)</label>
+      <label class="row"><input type="radio" name="preset" value="uniform"> Uniform (floats free)</label>
+    </div>
+
+    <div>
+      <span class="section-label">Display</span>
+      <label class="row"><input type="checkbox" id="showPolygon" checked> Control polygon</label>
+      <label class="row"><input type="checkbox" id="showBasis"> Basis functions</label>
+    </div>
+
+    <button id="resetBtn">Reset curve</button>
+  </div>
+</div>
+
+<footer>CC0 · <a href="https://github.com/DavidMStraub/teaching-apps">GitHub</a></footer>
+
+<script>
+(function () {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const mainSvg = document.getElementById("main-svg");
+  const knotSvg = document.getElementById("knot-strip");
+  const basisSvg = document.getElementById("basis-plot");
+  const basisLabel = document.getElementById("basis-label");
+  const VBW = 800, VBH = 460;
+  const KVBW = 800, KVBH = 40;
+  const BVBW = 800, BVBH = 110;
+  const DEGREE = 3;
+  const SAMPLES = 240;
+
+  let state = {
+    points: [],
+    knots: [],
+    preset: "clamped",
+    showPolygon: true,
+    showBasis: false
+  };
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(svgNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  // --- knot vector generation ---
+
+  function clampedKnots(n, p) {
+    const interior = n - p - 1;
+    const knots = [];
+    for (let i = 0; i <= p; i++) knots.push(0);
+    for (let i = 1; i <= interior; i++) knots.push(i / (interior + 1));
+    for (let i = 0; i <= p; i++) knots.push(1);
+    return knots;
+  }
+
+  function uniformKnots(n, p) {
+    const m = n + p; // last index
+    const knots = [];
+    for (let i = 0; i <= m; i++) knots.push(i / m);
+    return knots;
+  }
+
+  function generateKnots() {
+    const n = state.points.length;
+    state.knots = state.preset === "clamped" ? clampedKnots(n, DEGREE) : uniformKnots(n, DEGREE);
+  }
+
+  // --- Cox-de Boor basis functions ---
+
+  function basis(i, p, t, knots) {
+    if (p === 0) {
+      return (t >= knots[i] && t < knots[i + 1]) ? 1 : 0;
+    }
+    let term1 = 0;
+    const d1 = knots[i + p] - knots[i];
+    if (d1 > 1e-9) term1 = (t - knots[i]) / d1 * basis(i, p - 1, t, knots);
+    let term2 = 0;
+    const d2 = knots[i + p + 1] - knots[i + 1];
+    if (d2 > 1e-9) term2 = (knots[i + p + 1] - t) / d2 * basis(i + 1, p - 1, t, knots);
+    return term1 + term2;
+  }
+
+  function domain() {
+    const n = state.points.length;
+    return { tMin: state.knots[DEGREE], tMax: state.knots[n] };
+  }
+
+  function evalCurve(t) {
+    const { tMax } = domain();
+    const tt = t >= tMax ? tMax - 1e-6 : t;
+    const n = state.points.length;
+    let x = 0, y = 0;
+    for (let i = 0; i < n; i++) {
+      const b = basis(i, DEGREE, tt, state.knots);
+      x += b * state.points[i].x;
+      y += b * state.points[i].y;
+    }
+    return { x, y };
+  }
+
+  // --- defaults ---
+
+  function defaultPoints() {
+    return [
+      { x: 90, y: 360 },
+      { x: 200, y: 100 },
+      { x: 340, y: 380 },
+      { x: 480, y: 100 },
+      { x: 620, y: 380 },
+      { x: 720, y: 160 }
+    ];
+  }
+
+  function reset() {
+    state.points = defaultPoints();
+    generateKnots();
+    render();
+  }
+
+  // --- editing operations ---
+
+  function addPointAt(pt) {
+    state.points.push(pt);
+    generateKnots();
+  }
+
+  function removePoint(idx) {
+    if (state.points.length <= DEGREE + 1) return;
+    state.points.splice(idx, 1);
+    generateKnots();
+  }
+
+  // --- rendering: main canvas ---
+
+  let dragging = null; // { type: 'point'|'knot', idx }
+  let pendingAdd = null;
+
+  function addInteractivePoint(cx, cy, visualR, fillVar, onPointerDown, onDblClick) {
+    const visual = el("circle", {
+      cx, cy, r: visualR, fill: fillVar,
+      stroke: "var(--bg)", "stroke-width": "1.5",
+      "pointer-events": "none"
+    });
+    mainSvg.appendChild(visual);
+    const hit = el("circle", { cx, cy, r: visualR + 7, fill: "transparent", style: "cursor:grab" });
+    hit.addEventListener("pointerdown", onPointerDown);
+    if (onDblClick) hit.addEventListener("dblclick", ev => { ev.stopPropagation(); onDblClick(); });
+    mainSvg.appendChild(hit);
+  }
+
+  function renderMain() {
+    mainSvg.innerHTML = "";
+    mainSvg.setAttribute("viewBox", `0 0 ${VBW} ${VBH}`);
+
+    if (state.showPolygon) {
+      for (let i = 0; i < state.points.length - 1; i++) {
+        const a = state.points[i], b = state.points[i + 1];
+        mainSvg.appendChild(el("line", {
+          x1: a.x, y1: a.y, x2: b.x, y2: b.y,
+          stroke: "var(--polygon-line)", "stroke-width": "1", "stroke-dasharray": "3 3"
+        }));
+      }
+    }
+
+    const { tMin, tMax } = domain();
+    let d = "";
+    for (let s = 0; s <= SAMPLES; s++) {
+      const t = tMin + (tMax - tMin) * s / SAMPLES;
+      const p = evalCurve(t);
+      d += (s === 0 ? "M " : "L ") + p.x + " " + p.y + " ";
+    }
+    mainSvg.appendChild(el("path", { d, fill: "none", stroke: "var(--curve)", "stroke-width": "2.5" }));
+
+    state.points.forEach((p, idx) => {
+      addInteractivePoint(
+        p.x, p.y, 6, "var(--point)",
+        ev => startDrag(ev, { type: "point", idx }),
+        () => { removePoint(idx); render(); }
+      );
+    });
+  }
+
+  // --- rendering: knot strip ---
+
+  function knotClusters() {
+    // groups knot indices whose values are (nearly) equal, in order
+    const n = state.points.length;
+    const clusters = [];
+    let i = 0;
+    while (i < state.knots.length) {
+      const group = [i];
+      while (i + 1 < state.knots.length && Math.abs(state.knots[i + 1] - state.knots[group[0]]) < 1e-6) {
+        i++;
+        group.push(i);
+      }
+      clusters.push(group);
+      i++;
+    }
+    return clusters;
+  }
+
+  function renderKnotStrip() {
+    knotSvg.innerHTML = "";
+    knotSvg.setAttribute("viewBox", `0 0 ${KVBW} ${KVBH}`);
+    const margin = 14;
+    const axisY = 22;
+    const usable = KVBW - margin * 2;
+
+    knotSvg.appendChild(el("line", {
+      x1: margin, y1: axisY, x2: KVBW - margin, y2: axisY,
+      stroke: "var(--polygon-line)", "stroke-width": "1.5"
+    }));
+
+    const { tMin, tMax } = domain();
+    knotSvg.appendChild(el("rect", {
+      x: margin + tMin * usable, y: axisY - 10,
+      width: (tMax - tMin) * usable, height: 20,
+      fill: "var(--knot-domain)", rx: 4
+    }));
+
+    const clusters = knotClusters();
+    clusters.forEach(group => {
+      const t = state.knots[group[0]];
+      const baseX = margin + t * usable;
+      const count = group.length;
+      group.forEach((knotIdx, j) => {
+        const offset = (j - (count - 1) / 2) * 6;
+        const x = baseX + offset;
+        const line = el("line", {
+          x1: x, y1: axisY - 9, x2: x, y2: axisY + 9,
+          stroke: "var(--knot)", "stroke-width": "2"
+        });
+        knotSvg.appendChild(line);
+        const hit = el("circle", { cx: x, cy: axisY, r: 9, fill: "transparent", style: "cursor:ew-resize" });
+        hit.addEventListener("pointerdown", ev => startDrag(ev, { type: "knot", idx: knotIdx }));
+        knotSvg.appendChild(hit);
+      });
+      if (count > 1) {
+        const label = el("text", {
+          x: baseX, y: axisY - 16, "text-anchor": "middle",
+          "font-size": "10", fill: "var(--muted)", "font-family": "Inter, sans-serif"
+        });
+        label.textContent = "×" + count;
+        knotSvg.appendChild(label);
+      }
+    });
+  }
+
+  // --- rendering: basis function plot ---
+
+  function renderBasisPlot() {
+    basisSvg.innerHTML = "";
+    if (!state.showBasis) return;
+    basisSvg.setAttribute("viewBox", `0 0 ${BVBW} ${BVBH}`);
+    const margin = 14;
+    const usable = BVBW - margin * 2;
+    const baseline = BVBH - 10;
+    const plotH = BVBH - 20;
+    const n = state.points.length;
+    const colors = ["#e0435a", "#3b82f6", "#22b07d", "#f5a623", "#8b5cf6", "#e07ac0", "#4dd0e1", "#a3a847"];
+
+    basisSvg.appendChild(el("line", {
+      x1: margin, y1: baseline, x2: BVBW - margin, y2: baseline,
+      stroke: "var(--polygon-line)", "stroke-width": "1"
+    }));
+
+    for (let i = 0; i < n; i++) {
+      let d = "";
+      for (let s = 0; s <= SAMPLES; s++) {
+        const t = s / SAMPLES;
+        const tt = t >= 1 ? 1 - 1e-6 : t;
+        const b = basis(i, DEGREE, tt, state.knots);
+        const x = margin + t * usable;
+        const y = baseline - b * plotH;
+        d += (s === 0 ? "M " : "L ") + x + " " + y + " ";
+      }
+      basisSvg.appendChild(el("path", {
+        d, fill: "none", stroke: colors[i % colors.length], "stroke-width": "1.6", opacity: "0.85"
+      }));
+    }
+  }
+
+  function render() {
+    renderMain();
+    renderKnotStrip();
+    renderBasisPlot();
+  }
+
+  // --- dragging ---
+
+  function svgPointFor(svgEl, viewBoxW, ev) {
+    const pt = svgEl.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    const ctm = svgEl.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return p;
+  }
+
+  function startDrag(ev, target) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    dragging = target;
+    window.addEventListener("pointermove", onDrag);
+    window.addEventListener("pointerup", endDrag);
+  }
+
+  function onDrag(ev) {
+    if (!dragging) return;
+    if (dragging.type === "point") {
+      const p = svgPointFor(mainSvg, VBW, ev);
+      const idx = dragging.idx;
+      state.points[idx] = {
+        x: Math.max(10, Math.min(VBW - 10, p.x)),
+        y: Math.max(10, Math.min(VBH - 10, p.y))
+      };
+    } else {
+      const p = svgPointFor(knotSvg, KVBW, ev);
+      const margin = 14;
+      const usable = KVBW - margin * 2;
+      let t = Math.max(0, Math.min(1, (p.x - margin) / usable));
+      const idx = dragging.idx;
+      // The two domain-bound knots (first/last) stay fixed. Every other knot
+      // is free to move anywhere in [0,1]: only the sorted *set* of values
+      // matters, not which array slot holds which, so we remove it and
+      // reinsert it at the sorted position for its new value. Clamping it
+      // between its immediate neighbors' *current* values (the old approach)
+      // deadlocked knots stuck inside a same-valued cluster — e.g. the middle
+      // two of four clamped knots at 0 both had neighbors equal to 0, so
+      // neither could ever move.
+      if (idx > 0 && idx < state.knots.length - 1) {
+        state.knots.splice(idx, 1);
+        let newIdx = 1;
+        while (newIdx < state.knots.length - 1 && state.knots[newIdx] <= t) newIdx++;
+        state.knots.splice(newIdx, 0, t);
+        dragging.idx = newIdx;
+      }
+    }
+    render();
+  }
+
+  function endDrag() {
+    dragging = null;
+    window.removeEventListener("pointermove", onDrag);
+    window.removeEventListener("pointerup", endDrag);
+  }
+
+  function clampToCanvas(p) {
+    return { x: Math.max(10, Math.min(VBW - 10, p.x)), y: Math.max(10, Math.min(VBH - 10, p.y)) };
+  }
+
+  mainSvg.addEventListener("pointerdown", ev => {
+    if (dragging) return;
+    pendingAdd = svgPointFor(mainSvg, VBW, ev);
+  });
+  window.addEventListener("pointerup", ev => {
+    if (!pendingAdd || dragging) { pendingAdd = null; return; }
+    const p = svgPointFor(mainSvg, VBW, ev);
+    const moved = Math.hypot(p.x - pendingAdd.x, p.y - pendingAdd.y);
+    pendingAdd = null;
+    if (moved < 6) {
+      addPointAt(clampToCanvas(p));
+      render();
+    }
+  });
+
+  document.querySelectorAll('input[name="preset"]').forEach(r => {
+    r.addEventListener("change", e => {
+      if (e.target.checked) { state.preset = e.target.value; generateKnots(); render(); }
+    });
+  });
+  document.getElementById("showPolygon").addEventListener("change", e => { state.showPolygon = e.target.checked; render(); });
+  document.getElementById("showBasis").addEventListener("change", e => {
+    state.showBasis = e.target.checked;
+    basisSvg.style.display = state.showBasis ? "" : "none";
+    basisLabel.style.display = state.showBasis ? "" : "none";
+    render();
+  });
+  document.getElementById("resetBtn").addEventListener("click", reset);
+
+  reset();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Electric Field Line Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --panel-bg: #ffffff;
+    --inset-bg: #f6f6f9;
+    --border: #e5e5ea;
+    --text: #1c1c1e;
+    --muted: #7a7a80;
+    --accent: #5b5bf0;
+    --positive: #e0435a;
+    --negative: #3b82f6;
+    --field-line: #9a9aa2;
+    --shadow: 0 1px 2px rgba(20, 20, 30, 0.04), 0 8px 24px rgba(20, 20, 30, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #232326;
+      --panel-bg: #232326;
+      --inset-bg: #1b1b1d;
+      --border: #38383c;
+      --text: #f2f2f4;
+      --muted: #9a9aa2;
+      --accent: #8585fa;
+      --positive: #ff6b6b;
+      --negative: #6699ff;
+      --field-line: #6e6e73;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 8px 24px rgba(0, 0, 0, 0.3);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 48px;
+    gap: 16px;
+  }
+  h1 { font-size: 1.7rem; margin: 0; }
+  .subtitle { color: var(--muted); font-size: 1rem; margin-top: -4px; text-align: center; max-width: 640px; }
+  .layout {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 1600px;
+  }
+  #canvas-wrap {
+    background: var(--inset-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 8px;
+    flex: 4 1 640px;
+    min-width: 400px;
+    max-width: min(1300px, 120vh);
+  }
+  svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    touch-action: none;
+    cursor: crosshair;
+  }
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow);
+    padding: 18px 20px 20px;
+    width: 260px;
+    flex: 0 0 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .section-label {
+    display: block;
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .slider-row .val {
+    font-variant-numeric: tabular-nums;
+    font-size: 0.9rem;
+    color: var(--muted);
+    width: 3.2em;
+    text-align: right;
+  }
+  .sign-toggle {
+    display: flex;
+    gap: 8px;
+  }
+  .sign-toggle button {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--inset-bg);
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  .sign-toggle button.active.positive { background: var(--positive); border-color: var(--positive); color: #fff; }
+  .sign-toggle button.active.negative { background: var(--negative); border-color: var(--negative); color: #fff; }
+  button.primary {
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.96rem;
+    cursor: pointer;
+    transition: filter 0.12s ease, transform 0.05s ease;
+  }
+  button.primary:hover { filter: brightness(1.08); }
+  button.primary:active { transform: translateY(1px); }
+  button.danger {
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--inset-bg);
+    color: var(--positive);
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 0.92rem;
+    cursor: pointer;
+  }
+  .empty-note {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+  footer { color: var(--muted); font-size: 0.82rem; margin-top: 8px; }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+
+<a href="../" style="align-self:flex-start; color:var(--accent); font-size:0.9rem; text-decoration:none; font-weight:600;">← All apps</a>
+<h1>Electric Field Line Simulator</h1>
+<p class="subtitle">
+  Click empty space to add a charge, drag to move it, double-click to remove it.
+  Click a charge to select it and adjust its magnitude and sign.
+</p>
+
+<div class="layout">
+  <div id="canvas-wrap">
+    <svg id="svg" viewBox="0 0 800 500"></svg>
+  </div>
+
+  <div class="panel">
+    <div>
+      <span class="section-label">Field lines</span>
+      <div class="slider-row">
+        <input type="range" id="density" min="2" max="24" step="1" value="12">
+        <span class="val" id="densityVal">12/q</span>
+      </div>
+    </div>
+
+    <div id="selectedSection">
+      <span class="section-label">Selected charge</span>
+      <p class="empty-note" id="noSelection">Click a charge to edit it.</p>
+      <div id="selectedControls" style="display:none;">
+        <div class="sign-toggle" style="margin-bottom:10px;">
+          <button id="signPos" class="positive">+</button>
+          <button id="signNeg" class="negative">−</button>
+        </div>
+        <div class="slider-row" style="margin-bottom:12px;">
+          <input type="range" id="magnitude" min="0.2" max="3" step="0.1" value="1">
+          <span class="val" id="magnitudeVal">1.0</span>
+        </div>
+        <button class="danger" id="removeBtn" style="width:100%;">Remove charge</button>
+      </div>
+    </div>
+
+    <button class="primary" id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<footer>CC0 · <a href="https://github.com/DavidMStraub/teaching-apps">GitHub</a></footer>
+
+<script>
+(function () {
+  const svgNS = "http://www.w3.org/2000/svg";
+  const svg = document.getElementById("svg");
+  const VBW = 800, VBH = 500;
+  // Lines near the axis directly behind a charge take a genuinely long loop
+  // before curving back to close (thousands of px of arc), even though the
+  // visible canvas is only 800x500 — this budget is sized generously so those
+  // lines actually complete their loop (verified: the default dipole's two
+  // hardest lines need ~5400px of arc) rather than being cut off early. We
+  // never drop a line for being unresolved: every emitted line must stay
+  // visible so line count/density around each charge keeps meaning field
+  // strength — silently discarding "slow" lines would make that region look
+  // artificially weak.
+  const MARGIN = 8000;
+  const RK4_STEP = 4;
+  const MAX_STEPS = 8000;
+
+  let state = {
+    charges: [],
+    density: 12, // field lines emitted per unit |q|
+    selected: -1
+  };
+
+  function el(tag, attrs) {
+    const e = document.createElementNS(svgNS, tag);
+    for (const k in attrs) e.setAttribute(k, attrs[k]);
+    return e;
+  }
+
+  function defaultCharges() {
+    return [
+      { x: 300, y: 250, q: 1 },
+      { x: 500, y: 250, q: -1 }
+    ];
+  }
+
+  function reset() {
+    state.charges = defaultCharges();
+    state.selected = -1;
+    render();
+  }
+
+  // --- physics ---
+
+  function chargeRadius(q) {
+    return 8 + 6 * Math.sqrt(Math.abs(q));
+  }
+
+  function fieldAt(x, y) {
+    let Ex = 0, Ey = 0;
+    for (const c of state.charges) {
+      const dx = x - c.x, dy = y - c.y;
+      const r2 = dx * dx + dy * dy;
+      if (r2 < 4) continue;
+      const r = Math.sqrt(r2);
+      const f = c.q / (r2 * r);
+      Ex += f * dx;
+      Ey += f * dy;
+    }
+    return { x: Ex, y: Ey };
+  }
+
+  function unitField(x, y, sign) {
+    const E = fieldAt(x, y);
+    const mag = Math.hypot(E.x, E.y) || 1e-9;
+    return { x: (sign * E.x) / mag, y: (sign * E.y) / mag };
+  }
+
+  // Marches along the field direction in fixed arc-length steps (RK4), from a
+  // point just outside `source`, until it comes near another charge or exits
+  // the canvas. `sign` is +1 to follow E (used from positive charges), -1 to
+  // follow -E (used from negative charges when there's no positive charge to
+  // trace from instead). Returns whether it actually reached another charge —
+  // that distinction matters: when the scene's net charge is zero, Gauss's
+  // law guarantees every line truly does end on a charge eventually, so a
+  // line we failed to resolve within the tracing budget is an artifact, not
+  // a real escaping line (see computeFieldLines).
+  function traceLine(source, startX, startY, sign) {
+    const pts = [{ x: startX, y: startY }];
+    let x = startX, y = startY;
+    for (let i = 0; i < MAX_STEPS; i++) {
+      const k1 = unitField(x, y, sign);
+      const k2 = unitField(x + RK4_STEP / 2 * k1.x, y + RK4_STEP / 2 * k1.y, sign);
+      const k3 = unitField(x + RK4_STEP / 2 * k2.x, y + RK4_STEP / 2 * k2.y, sign);
+      const k4 = unitField(x + RK4_STEP * k3.x, y + RK4_STEP * k3.y, sign);
+      x += (RK4_STEP / 6) * (k1.x + 2 * k2.x + 2 * k3.x + k4.x);
+      y += (RK4_STEP / 6) * (k1.y + 2 * k2.y + 2 * k3.y + k4.y);
+      pts.push({ x, y });
+
+      for (const c of state.charges) {
+        if (c === source) continue;
+        const d = Math.hypot(x - c.x, y - c.y);
+        if (d < chargeRadius(c.q) + 3) return pts;
+      }
+      if (x < -MARGIN || x > VBW + MARGIN || y < -MARGIN || y > VBH + MARGIN) return pts;
+    }
+    return pts;
+  }
+
+  function computeFieldLines() {
+    const positives = state.charges.filter(c => c.q > 0);
+    const emitters = positives.length > 0
+      ? positives.map(c => ({ c, sign: 1 }))
+      : state.charges.filter(c => c.q < 0).map(c => ({ c, sign: -1 }));
+
+    const lines = [];
+    for (const { c, sign } of emitters) {
+      // Every emitted line is drawn, regardless of where it ends up: dropping
+      // any of them would break line density as a proxy for field strength.
+      const n = Math.max(3, Math.min(48, Math.round(state.density * Math.abs(c.q))));
+      const r0 = chargeRadius(c.q) + 4;
+      for (let i = 0; i < n; i++) {
+        const angle = (2 * Math.PI * i) / n;
+        const sx = c.x + r0 * Math.cos(angle);
+        const sy = c.y + r0 * Math.sin(angle);
+        let ptsOut = traceLine(c, sx, sy, sign);
+        // Backward-traced lines (from an isolated negative charge) are walked
+        // outward from the charge; reverse so the arrow still points into it.
+        if (sign === -1) ptsOut = ptsOut.slice().reverse();
+        lines.push(ptsOut);
+      }
+    }
+    return lines;
+  }
+
+  // --- rendering ---
+
+  function pathFromPoints(pts) {
+    return pts.map((p, i) => (i === 0 ? "M " : "L ") + p.x + " " + p.y).join(" ");
+  }
+
+  function arrowAt(pts, fraction) {
+    const idx = Math.max(1, Math.min(pts.length - 1, Math.round(pts.length * fraction)));
+    const p = pts[idx], prev = pts[idx - 1];
+    const angle = Math.atan2(p.y - prev.y, p.x - prev.x);
+    const size = 6;
+    const tip = { x: p.x, y: p.y };
+    const back = size * 1.8;
+    const spread = 0.45;
+    const b1 = { x: tip.x - back * Math.cos(angle - spread), y: tip.y - back * Math.sin(angle - spread) };
+    const b2 = { x: tip.x - back * Math.cos(angle + spread), y: tip.y - back * Math.sin(angle + spread) };
+    return el("polygon", {
+      points: `${tip.x},${tip.y} ${b1.x},${b1.y} ${b2.x},${b2.y}`,
+      fill: "var(--field-line)"
+    });
+  }
+
+  let dragging = null;
+  let pendingAdd = null;
+
+  function addInteractivePoint(cx, cy, visualR, fillVar, onPointerDown, onDblClick, extraAttrs) {
+    const visual = el("circle", Object.assign({
+      cx, cy, r: visualR, fill: fillVar,
+      stroke: "var(--bg)", "stroke-width": "2",
+      "pointer-events": "none"
+    }, extraAttrs || {}));
+    svg.appendChild(visual);
+    const hit = el("circle", { cx, cy, r: visualR + 7, fill: "transparent", style: "cursor:grab" });
+    hit.addEventListener("pointerdown", onPointerDown);
+    if (onDblClick) hit.addEventListener("dblclick", ev => { ev.stopPropagation(); onDblClick(); });
+    svg.appendChild(hit);
+  }
+
+  function render() {
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", `0 0 ${VBW} ${VBH}`);
+
+    for (const pts of computeFieldLines()) {
+      if (pts.length < 2) continue;
+      svg.appendChild(el("path", {
+        d: pathFromPoints(pts), fill: "none", stroke: "var(--field-line)", "stroke-width": "1.4"
+      }));
+      if (pts.length > 6) svg.appendChild(arrowAt(pts, 0.5));
+    }
+
+    state.charges.forEach((c, idx) => {
+      const r = chargeRadius(c.q);
+      const color = c.q >= 0 ? "var(--positive)" : "var(--negative)";
+      if (idx === state.selected) {
+        svg.appendChild(el("circle", {
+          cx: c.x, cy: c.y, r: r + 6, fill: "none", stroke: "var(--accent)",
+          "stroke-width": "2", "stroke-dasharray": "3 3"
+        }));
+      }
+      addInteractivePoint(
+        c.x, c.y, r, color,
+        ev => { selectCharge(idx); startDrag(ev, idx); },
+        () => { removeCharge(idx); render(); }
+      );
+      const label = el("text", {
+        x: c.x, y: c.y + 4, "text-anchor": "middle",
+        "font-size": "12", "font-weight": "700", fill: "#fff",
+        "font-family": "Inter, sans-serif", "pointer-events": "none"
+      });
+      label.textContent = c.q >= 0 ? "+" : "−";
+      svg.appendChild(label);
+    });
+
+    syncPanel();
+  }
+
+  // --- editing ---
+
+  function selectCharge(idx) {
+    state.selected = idx;
+  }
+
+  function removeCharge(idx) {
+    state.charges.splice(idx, 1);
+    if (state.selected === idx) state.selected = -1;
+    else if (state.selected > idx) state.selected--;
+  }
+
+  function addChargeAt(pt) {
+    state.charges.push({ x: pt.x, y: pt.y, q: 1 });
+    state.selected = state.charges.length - 1;
+  }
+
+  // --- panel sync ---
+
+  function syncPanel() {
+    const noSel = document.getElementById("noSelection");
+    const controls = document.getElementById("selectedControls");
+    if (state.selected < 0 || !state.charges[state.selected]) {
+      noSel.style.display = "";
+      controls.style.display = "none";
+      return;
+    }
+    noSel.style.display = "none";
+    controls.style.display = "";
+    const c = state.charges[state.selected];
+    document.getElementById("signPos").classList.toggle("active", c.q >= 0);
+    document.getElementById("signNeg").classList.toggle("active", c.q < 0);
+    document.getElementById("magnitude").value = Math.abs(c.q).toFixed(1);
+    document.getElementById("magnitudeVal").textContent = Math.abs(c.q).toFixed(1);
+  }
+
+  // --- dragging / adding ---
+
+  function svgPoint(ev) {
+    const pt = svg.createSVGPoint();
+    pt.x = ev.clientX; pt.y = ev.clientY;
+    const ctm = svg.getScreenCTM().inverse();
+    const p = pt.matrixTransform(ctm);
+    return { x: p.x, y: p.y };
+  }
+
+  function clampToCanvas(p) {
+    return { x: Math.max(10, Math.min(VBW - 10, p.x)), y: Math.max(10, Math.min(VBH - 10, p.y)) };
+  }
+
+  function startDrag(ev, idx) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    dragging = idx;
+    window.addEventListener("pointermove", onDrag);
+    window.addEventListener("pointerup", endDrag);
+    render();
+  }
+
+  function onDrag(ev) {
+    if (dragging === null) return;
+    const p = clampToCanvas(svgPoint(ev));
+    state.charges[dragging].x = p.x;
+    state.charges[dragging].y = p.y;
+    render();
+  }
+
+  function endDrag() {
+    dragging = null;
+    window.removeEventListener("pointermove", onDrag);
+    window.removeEventListener("pointerup", endDrag);
+  }
+
+  svg.addEventListener("pointerdown", ev => {
+    if (dragging !== null) return;
+    pendingAdd = svgPoint(ev);
+  });
+  window.addEventListener("pointerup", ev => {
+    if (!pendingAdd || dragging !== null) { pendingAdd = null; return; }
+    const p = svgPoint(ev);
+    const moved = Math.hypot(p.x - pendingAdd.x, p.y - pendingAdd.y);
+    pendingAdd = null;
+    if (moved < 6) {
+      addChargeAt(clampToCanvas(p));
+      render();
+    }
+  });
+
+  // --- panel controls ---
+
+  const densitySlider = document.getElementById("density");
+  densitySlider.addEventListener("input", e => {
+    state.density = parseInt(e.target.value, 10);
+    document.getElementById("densityVal").textContent = state.density + "/q";
+    render();
+  });
+
+  document.getElementById("signPos").addEventListener("click", () => {
+    const c = state.charges[state.selected];
+    if (!c) return;
+    c.q = Math.abs(c.q);
+    render();
+  });
+  document.getElementById("signNeg").addEventListener("click", () => {
+    const c = state.charges[state.selected];
+    if (!c) return;
+    c.q = -Math.abs(c.q);
+    render();
+  });
+  document.getElementById("magnitude").addEventListener("input", e => {
+    const c = state.charges[state.selected];
+    if (!c) return;
+    const mag = parseFloat(e.target.value);
+    c.q = c.q >= 0 ? mag : -mag;
+    document.getElementById("magnitudeVal").textContent = mag.toFixed(1);
+    render();
+  });
+  document.getElementById("removeBtn").addEventListener("click", () => {
+    if (state.selected < 0) return;
+    removeCharge(state.selected);
+    render();
+  });
+  document.getElementById("resetBtn").addEventListener("click", reset);
+
+  reset();
+})();
+</script>
+
+</body>
+</html>
